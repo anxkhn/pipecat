@@ -257,6 +257,17 @@ class DeepgramSageMakerSTTService(STTService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Clean up the Deepgram SageMaker STT service.
+
+        Guaranteed teardown hook: the pipeline calls this on every processor at
+        teardown regardless of frame flow, so it disconnects the BiDi session and
+        cancels background tasks even when no CancelFrame/EndFrame arrives. See the
+        Processor Lifecycle section in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame | None, None]:
         """Send audio data to Deepgram for transcription.
 

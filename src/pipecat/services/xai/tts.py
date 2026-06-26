@@ -29,8 +29,6 @@ from websockets.asyncio.client import connect as websocket_connect
 from websockets.protocol import State
 
 from pipecat.frames.frames import (
-    CancelFrame,
-    EndFrame,
     ErrorFrame,
     Frame,
     StartFrame,
@@ -239,6 +237,17 @@ class XAIHttpTTSService(TTSService):
         await super().cancel(frame)
         await self._close_session()
 
+    async def cleanup(self):
+        """Release xAI TTS resources at teardown (guaranteed).
+
+        Closes the owned aiohttp session even if no ``EndFrame`` or
+        ``CancelFrame`` reaches this processor. ``_close_session`` is idempotent,
+        so repeating it from the frame-driven paths above is harmless. See the
+        Processor Lifecycle section in ``CONTRIBUTING.md``.
+        """
+        await super().cleanup()
+        await self._close_session()
+
     async def _close_session(self):
         if self._session_owner and self._session and not self._session.closed:
             await self._session.close()
@@ -426,16 +435,6 @@ class XAITTSService(WebsocketTTSService):
         """Start the xAI WebSocket TTS service."""
         await super().start(frame)
         await self._connect()
-
-    async def stop(self, frame: EndFrame):
-        """Stop the xAI WebSocket TTS service."""
-        await super().stop(frame)
-        await self._disconnect()
-
-    async def cancel(self, frame: CancelFrame):
-        """Cancel the xAI WebSocket TTS service."""
-        await super().cancel(frame)
-        await self._disconnect()
 
     async def _connect(self):
         await super()._connect()

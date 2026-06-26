@@ -614,6 +614,17 @@ class SpeechmaticsSTTService(STTService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release Speechmatics resources at pipeline teardown.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle
+        section in CONTRIBUTING.md): it always runs, even when no
+        ``EndFrame`` or ``CancelFrame`` reaches this processor. ``_disconnect``
+        is idempotent, so it is safe to run again after ``stop``/``cancel``.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def _connect(self) -> None:
         """Connect to the STT service.
 

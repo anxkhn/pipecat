@@ -652,9 +652,23 @@ class GoogleLLMService(LLMService[GeminiLLMAdapter]):
         await super().cancel(frame)
         await self._close_client()
 
+    async def cleanup(self):
+        """Release resources held by the service.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle
+        section in CONTRIBUTING.md): it closes the Gemini client even when a
+        StopFrame/CancelFrame never reaches this processor.
+        """
+        await super().cleanup()
+        await self._close_client()
+
     async def _close_client(self):
+        if not self._client:
+            return
         try:
             await self._client.aio.aclose()
         except Exception:
             # Do nothing - we're shutting down anyway
             pass
+        finally:
+            self._client = None

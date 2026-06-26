@@ -211,19 +211,32 @@ class LemonSliceTransportClient:
             await self._daily_transport_client.setup(setup)
         except Exception as e:
             logger.error(f"Failed to setup LemonSliceTransportClient: {e}")
-            if self._session_id and self._control_url:
-                await self._api.end_session(self._session_id, self._control_url)
-            self._session_id = None
-            self._control_url = None
+            await self._end_session()
             raise
 
     async def cleanup(self):
-        """Cleanup client resources."""
+        """Cleanup client resources.
+
+        Guaranteed teardown for the client: cleans up the Daily transport client
+        and ends the LemonSlice session. See the Processor Lifecycle section in
+        CONTRIBUTING.md.
+        """
         try:
             if self._daily_transport_client:
                 await self._daily_transport_client.cleanup()
         except Exception as e:
             logger.error(f"Exception during cleanup: {e}")
+        await self._end_session()
+
+    async def _end_session(self):
+        """End the LemonSlice session.
+
+        Idempotent: safe to call from stop(), cleanup(), and the setup error path.
+        """
+        if self._session_id and self._control_url:
+            await self._api.end_session(self._session_id, self._control_url)
+        self._session_id = None
+        self._control_url = None
 
     async def _on_joined(self, data):
         """Handle joined event."""
@@ -257,10 +270,7 @@ class LemonSliceTransportClient:
     async def stop(self):
         """Stop the client and end the conversation."""
         await self._daily_transport_client.leave()
-        if self._session_id and self._control_url:
-            await self._api.end_session(self._session_id, self._control_url)
-        self._session_id = None
-        self._control_url = None
+        await self._end_session()
 
     async def capture_participant_video(
         self,

@@ -497,6 +497,16 @@ class NvidiaSTTService(STTService):
         await super().cancel(frame)
         await self._stop_tasks()
 
+    async def cleanup(self):
+        """Guaranteed teardown for the streaming ASR resources.
+
+        Called by the pipeline on every processor at teardown, independent of
+        frame flow, so the stream thread and audio iterator are always released.
+        See the Processor Lifecycle section in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._stop_tasks()
+
     async def _stop_tasks(self, close_iterator: bool = True):
         """Stop the active stream thread and optionally close the shared iterator.
 

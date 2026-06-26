@@ -129,11 +129,27 @@ class GStreamerPipelineSource(FrameProcessor):
 
     async def _stop(self, frame: EndFrame):
         """Stop the GStreamer pipeline."""
-        self._player.set_state(Gst.State.NULL)
+        self._close()
 
     async def _cancel(self, frame: CancelFrame):
         """Cancel the GStreamer pipeline."""
-        self._player.set_state(Gst.State.NULL)
+        self._close()
+
+    async def cleanup(self):
+        """Release the GStreamer pipeline.
+
+        This is the guaranteed teardown hook the pipeline calls on every
+        processor at teardown, independent of frame flow. See the "Processor
+        Lifecycle" section in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        self._close()
+
+    def _close(self):
+        """Release the GStreamer pipeline. Idempotent."""
+        if self._player is not None:
+            self._player.set_state(Gst.State.NULL)
+            self._player = None
 
     #
     # GStreamer

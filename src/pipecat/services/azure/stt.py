@@ -291,6 +291,17 @@ class AzureSTTService(STTService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release resources at pipeline teardown.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle
+        section in CONTRIBUTING.md): it always runs, independent of frame flow,
+        so it stops recognition and closes the audio stream via the idempotent
+        ``_disconnect()`` that ``stop()`` and ``cancel()`` also use.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def _connect(self):
         """Initialize the Azure speech recognizer and begin continuous recognition."""
         if self._audio_stream:

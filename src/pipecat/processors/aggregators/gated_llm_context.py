@@ -57,6 +57,17 @@ class GatedLLMContextAggregator(FrameProcessor):
         else:
             await self.push_frame(frame, direction)
 
+    async def cleanup(self):
+        """Release resources held by the aggregator.
+
+        This is the guaranteed teardown hook: the pipeline calls it on every
+        processor at teardown, independent of frame flow, so the gate task is
+        always cancelled even if no EndFrame or CancelFrame reaches this
+        processor. See the Processor Lifecycle section in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._stop()
+
     async def _start(self):
         """Start the gate task handler."""
         if not self._gate_task:

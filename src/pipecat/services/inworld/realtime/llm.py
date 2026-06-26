@@ -531,6 +531,16 @@ class InworldRealtimeLLMService(LLMService[InworldRealtimeLLMAdapter]):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release resources on teardown.
+
+        Guaranteed teardown hook: closes the WebSocket and cancels the receive
+        task via the idempotent :meth:`_disconnect`, independent of frame flow.
+        See the Processor Lifecycle section in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     #
     # Frame processing
     #

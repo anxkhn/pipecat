@@ -409,6 +409,17 @@ class UltravoxRealtimeLLMService(LLMService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release resources held by the service.
+
+        This is the guaranteed teardown hook (see the "Processor Lifecycle"
+        section in CONTRIBUTING.md): it runs at pipeline teardown regardless of
+        frame flow, so it idempotently repeats the websocket disconnect and
+        receive-task cancellation that ``stop()``/``cancel()`` perform.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def _disconnect(self):
         self._disconnecting = True
         if self._socket:

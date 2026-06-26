@@ -170,6 +170,16 @@ class MistralSTTService(STTService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Clean up resources, closing the connection and cancelling tasks.
+
+        This is the guaranteed teardown hook, called by the pipeline on every
+        processor independent of frame flow. See the Processor Lifecycle section
+        in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         """Process incoming frames and handle speech events.
 

@@ -436,6 +436,17 @@ class OpenAIResponsesLLMService(
             self._clear_previous_response_state()
             self._clear_cancellation_state()
 
+    async def cleanup(self):
+        """Release resources at teardown (guaranteed).
+
+        Closes the WebSocket connection via the same idempotent ``_disconnect()``
+        used by ``stop()``/``cancel()``, so it is torn down even if no
+        ``EndFrame`` or ``CancelFrame`` reaches this processor. See the Processor
+        Lifecycle section in ``CONTRIBUTING.md``.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     # -- previous_response_id optimization ------------------------------------
 
     @staticmethod

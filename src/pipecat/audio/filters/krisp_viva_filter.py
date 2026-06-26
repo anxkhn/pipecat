@@ -93,6 +93,7 @@ class KrispVivaFilter(BaseAudioFilter):
                 raise FileNotFoundError(f"Model file not found: {self._model_path}")
 
             self._session = None
+            self._sdk_acquired = False
             self._samples_per_frame = None
             self._noise_suppression_level = noise_suppression_level
             self._frame_duration_ms = frame_duration
@@ -141,6 +142,7 @@ class KrispVivaFilter(BaseAudioFilter):
         try:
             # Acquire SDK reference (will initialize on first call)
             KrispVivaSDKManager.acquire(api_key=self._api_key)
+            self._sdk_acquired = True
             self._session = self._create_session(sample_rate, self._frame_duration_ms)
         except Exception as e:
             logger.error(f"Failed to start Krisp session: {e}", exc_info=True)
@@ -148,11 +150,21 @@ class KrispVivaFilter(BaseAudioFilter):
             raise RuntimeError(f"Failed to create Krisp processing session: {e}") from e
 
     async def stop(self):
-        """Clean up the Krisp processor when stopping."""
+        """Release the Krisp processor and its SDK reference.
+
+        This is the guaranteed teardown path for the filter: the input
+        transport calls it from its ``cleanup()`` as well as from the
+        frame-driven ``stop``/``cancel`` paths, so it may run more than once.
+        The SDK release is guarded so repeated calls do not over-decrement the
+        shared reference count. See the Processor Lifecycle section in
+        ``CONTRIBUTING.md``.
+        """
         try:
             self._session = None
             self._audio_buffer.clear()
-            KrispVivaSDKManager.release()
+            if self._sdk_acquired:
+                self._sdk_acquired = False
+                KrispVivaSDKManager.release()
         except Exception as e:
             logger.error(f"Error in stop: {e}", exc_info=True)
             raise RuntimeError(f"Failed to stop Krisp processor: {e}") from e

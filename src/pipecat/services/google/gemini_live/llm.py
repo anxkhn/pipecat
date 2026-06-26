@@ -754,6 +754,18 @@ class GeminiLiveLLMService(LLMService[GeminiLLMAdapter]):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release resources at pipeline teardown.
+
+        This is the guaranteed teardown hook (see the "Processor Lifecycle"
+        section in CONTRIBUTING.md): it runs on every processor regardless of
+        frame flow, so it repeats the idempotent ``_disconnect()`` to ensure the
+        websocket session and background tasks are released even if no
+        ``CancelFrame``/``EndFrame`` reached the service.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     #
     # speech and interruption handling
     #

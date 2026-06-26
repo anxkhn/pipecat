@@ -527,6 +527,17 @@ class DeepgramSTTService(STTService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release Deepgram resources.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle
+        section in CONTRIBUTING.md): it always runs at pipeline teardown,
+        independent of frame flow. It idempotently disconnects the WebSocket
+        and cancels the connection task, mirroring ``stop()``/``cancel()``.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame | None, None]:
         """Send audio data to Deepgram for transcription.
 

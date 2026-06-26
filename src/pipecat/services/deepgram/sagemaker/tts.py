@@ -162,6 +162,17 @@ class DeepgramSageMakerTTSService(TTSService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Clean up the Deepgram SageMaker TTS service.
+
+        This is the guaranteed teardown hook: it runs at pipeline teardown
+        independent of frame flow, so it repeats the idempotent
+        :meth:`_disconnect` to release the BiDi session and the response task.
+        See the Processor Lifecycle section in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def _connect(self):
         """Connect to the SageMaker endpoint and start the BiDi session.
 

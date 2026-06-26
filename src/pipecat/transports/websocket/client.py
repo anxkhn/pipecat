@@ -294,8 +294,16 @@ class WebsocketClientInputTransport(BaseInputTransport):
         await self._session.disconnect()
 
     async def cleanup(self):
-        """Clean up the input transport resources."""
+        """Clean up the input transport resources.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle section
+        in CONTRIBUTING.md). It disconnects the session, mirroring ``stop()`` and
+        ``cancel()`` so the websocket and its receive task are released even when
+        no EndFrame or CancelFrame reaches the transport. ``disconnect()`` is
+        idempotent, so repeating it here is safe.
+        """
         await super().cleanup()
+        await self._session.disconnect()
         await self._transport.cleanup()
 
     async def on_message(self, websocket, message):
@@ -402,8 +410,16 @@ class WebsocketClientOutputTransport(BaseOutputTransport):
         await self._session.disconnect()
 
     async def cleanup(self):
-        """Clean up the output transport resources."""
+        """Clean up the output transport resources.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle section
+        in CONTRIBUTING.md). It disconnects the session, mirroring ``stop()`` and
+        ``cancel()`` so the websocket and its receive task are released even when
+        no EndFrame or CancelFrame reaches the transport. ``disconnect()`` is
+        idempotent, so repeating it here is safe.
+        """
         await super().cleanup()
+        await self._session.disconnect()
         await self._transport.cleanup()
 
     async def send_message(

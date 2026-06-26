@@ -88,9 +88,17 @@ class HeyGenInputTransport(BaseInputTransport):
         await self._client.setup(setup)
 
     async def cleanup(self):
-        """Cleanup input transport resources."""
+        """Release input transport resources.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle
+        section in CONTRIBUTING.md): the pipeline calls it on every processor
+        independent of frame flow. It stops the HeyGen client so the websocket
+        and LiveKit connections are closed and their tasks (receive, keep-alive,
+        audio/video) are cancelled even when a CancelFrame or EndFrame never
+        reaches this transport. ``HeyGenClient.stop()`` is idempotent.
+        """
         await super().cleanup()
-        await self._client.cleanup()
+        await self._client.stop()
 
     async def start(self, frame: StartFrame):
         """Start the input transport.
@@ -186,9 +194,17 @@ class HeyGenOutputTransport(BaseOutputTransport):
         await self._client.setup(setup)
 
     async def cleanup(self):
-        """Cleanup output transport resources."""
+        """Release output transport resources.
+
+        This is the guaranteed teardown hook (see the Processor Lifecycle
+        section in CONTRIBUTING.md): the pipeline calls it on every processor
+        independent of frame flow. It stops the HeyGen client so the websocket
+        and LiveKit connections are closed and their tasks (receive, keep-alive,
+        audio/video) are cancelled even when a CancelFrame or EndFrame never
+        reaches this transport. ``HeyGenClient.stop()`` is idempotent.
+        """
         await super().cleanup()
-        await self._client.cleanup()
+        await self._client.stop()
 
     async def start(self, frame: StartFrame):
         """Start the output transport.

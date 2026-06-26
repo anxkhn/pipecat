@@ -133,10 +133,18 @@ class TavusVideoService(AIService):
         await self._client.setup(setup)
 
     async def cleanup(self):
-        """Clean up the service and release resources."""
+        """Guaranteed teardown for the service.
+
+        Called by the pipeline on every processor at teardown, independent of
+        frame flow, so it is the reliable place to cancel the send task and
+        release the Tavus client. See the Processor Lifecycle section in
+        CONTRIBUTING.md.
+        """
         await super().cleanup()
-        await self._client.cleanup()
-        self._client = None
+        await self._cancel_send_task()
+        if self._client:
+            await self._client.cleanup()
+            self._client = None
 
     async def _on_joined(self, data):
         """Handle bot joined the Daily room."""
@@ -225,8 +233,7 @@ class TavusVideoService(AIService):
             frame: The end frame.
         """
         await super().stop(frame)
-        await self._end_conversation()
-        await self._cancel_send_task()
+        await self._teardown()
 
     async def cancel(self, frame: CancelFrame):
         """Cancel the Tavus video service.
@@ -235,8 +242,7 @@ class TavusVideoService(AIService):
             frame: The cancel frame.
         """
         await super().cancel(frame)
-        await self._end_conversation()
-        await self._cancel_send_task()
+        await self._teardown()
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         """Process frames through the service.
@@ -270,6 +276,14 @@ class TavusVideoService(AIService):
         await self._cancel_send_task()
         await self._create_send_task()
         await self._client.send_interrupt_message()
+
+    async def _teardown(self):
+        """Idempotent teardown shared by stop() and cancel().
+
+        Gracefully ends the Tavus conversation and cancels the send task.
+        """
+        await self._end_conversation()
+        await self._cancel_send_task()
 
     async def _end_conversation(self):
         """End the current conversation and reset state."""

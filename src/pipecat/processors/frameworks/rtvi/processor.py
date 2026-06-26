@@ -251,6 +251,17 @@ class RTVIProcessor(FrameProcessor):
         else:
             await self.push_frame(frame, direction)
 
+    async def cleanup(self):
+        """Release resources held by the processor.
+
+        This is the guaranteed teardown hook: the pipeline calls it on every
+        processor at teardown, independent of frame flow, so it must reach all
+        resource release. Here it cancels the message-handling task. See the
+        Processor Lifecycle section in CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._cancel_tasks()
+
     async def _start(self, frame: StartFrame):
         """Start the RTVI processor tasks."""
         if not self._message_task:

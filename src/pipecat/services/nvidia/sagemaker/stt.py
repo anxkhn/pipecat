@@ -154,6 +154,18 @@ class NvidiaSageMakerSTTService(STTService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release resources as the guaranteed teardown hook.
+
+        The pipeline calls this on every processor at teardown regardless of
+        frame flow, so it idempotently disconnects (cancelling the response
+        task and closing the client session) to back up the frame-driven
+        :meth:`stop` and :meth:`cancel`. See the Processor Lifecycle section in
+        CONTRIBUTING.md.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     # ── Audio input ───────────────────────────────────────────────────────────
 
     async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame | None, None]:

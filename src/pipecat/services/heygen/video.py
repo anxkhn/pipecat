@@ -157,11 +157,17 @@ class HeyGenVideoService(AIService):
     async def cleanup(self):
         """Clean up the service and release resources.
 
-        Terminates the HeyGen client session and cleans up associated resources.
+        This is the guaranteed teardown hook: the pipeline calls it on every
+        processor at teardown, independent of frame flow, so it idempotently
+        repeats the prompt teardown (ending the conversation and cancelling the
+        send task) and then terminates the HeyGen client session. See the
+        Processor Lifecycle section in CONTRIBUTING.md.
         """
         await super().cleanup()
-        await self._client.cleanup()
-        self._client = None
+        await self._teardown()
+        if self._client:
+            await self._client.cleanup()
+            self._client = None
 
     async def _on_connected(self):
         """Handle bot connected to LiveKit room."""
@@ -228,8 +234,7 @@ class HeyGenVideoService(AIService):
             frame: The end frame.
         """
         await super().stop(frame)
-        await self._end_conversation()
-        await self._cancel_send_task()
+        await self._teardown()
 
     async def cancel(self, frame: CancelFrame):
         """Cancel the HeyGen video service.
@@ -241,8 +246,7 @@ class HeyGenVideoService(AIService):
             frame: The cancel frame.
         """
         await super().cancel(frame)
-        await self._end_conversation()
-        await self._cancel_send_task()
+        await self._teardown()
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         """Process incoming frames and coordinate avatar behavior.
@@ -306,13 +310,23 @@ class HeyGenVideoService(AIService):
         await self._create_send_task()
         await self._client.start_agent_listening()
 
+    async def _teardown(self):
+        """Idempotent teardown shared by stop(), cancel(), and cleanup().
+
+        Ends the conversation (stopping the client's websocket/LiveKit producer
+        loops) and cancels the send task.
+        """
+        await self._end_conversation()
+        await self._cancel_send_task()
+
     async def _end_conversation(self):
         """End the current conversation and reset state.
 
         Stops the HeyGen client and cleans up conversation-specific resources.
         """
         self._other_participant_has_joined = False
-        await self._client.stop()
+        if self._client:
+            await self._client.stop()
 
     async def _create_send_task(self):
         """Create the audio sending task if it doesn't exist."""
