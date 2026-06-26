@@ -543,7 +543,27 @@ class FrameProcessor(BaseObject):
             await self._metrics.setup(self.task_manager)
 
     async def cleanup(self):
-        """Clean up processor resources."""
+        """Release this processor's resources at teardown.
+
+        This is the only lifecycle hook guaranteed to run: the pipeline calls it
+        directly on every processor during teardown, independent of frame flow, so
+        it runs no matter how the pipeline ended (graceful end, cancel, error, or a
+        ``CancelFrame`` that never reached this processor). It is therefore the home
+        for all resource release: close connections, release clients, cancel the
+        tasks you created with :meth:`create_task`, delete temp files. Make that
+        work idempotent and override this method to add it.
+
+        ``start``/``stop``/``cancel`` (defined by some base classes such as
+        ``AIService`` and the transports, not by ``FrameProcessor``) are
+        frame-driven and skippable, so they must never be the only place a resource
+        is released; use ``cancel()`` only for the time-sensitive subset (stopping
+        active output promptly). See the Processor Lifecycle section in
+        ``CONTRIBUTING.md``.
+
+        Note this base implementation cancels only the processor's *internal*
+        input/process tasks; tasks created via :meth:`create_task` are released by
+        your override.
+        """
         await super().cleanup()
         await self.__cancel_input_task()
         await self.__cancel_process_task()

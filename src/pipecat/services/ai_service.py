@@ -85,10 +85,13 @@ class AIService(FrameProcessor):
         self._tracing_context = frame.tracing_context
 
     async def stop(self, frame: EndFrame):
-        """Stop the AI service.
+        """Stop the AI service on a graceful end (``EndFrame``).
 
-        Called when the service should stop processing. Subclasses should
-        override this method to perform cleanup operations.
+        Runs in frame order, after pending frames drain. Override for graceful
+        shutdown behavior, such as flushing in-flight work before stopping. This
+        hook is frame-driven and may be skipped, so do not release resources only
+        here: resource release belongs in :meth:`cleanup`, which is guaranteed. See
+        the Processor Lifecycle section in ``CONTRIBUTING.md``.
 
         Args:
             frame: The end frame.
@@ -96,10 +99,14 @@ class AIService(FrameProcessor):
         pass
 
     async def cancel(self, frame: CancelFrame):
-        """Cancel the AI service.
+        """Cancel the AI service immediately (``CancelFrame``).
 
-        Called when the service should cancel all operations. Subclasses should
-        override this method to handle cancellation logic.
+        Runs at once, ahead of any queued frames, to abort active work fast (for
+        example, stop producing audio now). Override only for that time-sensitive
+        subset. This hook is frame-driven and may be skipped, so do not release
+        resources only here: resource release belongs in :meth:`cleanup`, which is
+        guaranteed, and the prompt stop should also be reachable from there
+        (idempotently). See the Processor Lifecycle section in ``CONTRIBUTING.md``.
 
         Args:
             frame: The cancel frame.

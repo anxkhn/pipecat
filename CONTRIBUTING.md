@@ -363,6 +363,120 @@ class Status(Enum):
     FAILED = "failed"
 ```
 
+## Processor Lifecycle: start, stop, cancel, cleanup
+
+Frame processors have up to four teardown-related hooks. Putting teardown logic
+in the wrong one is a common source of resource leaks, so follow this rule.
+
+### The hooks
+
+- `cleanup()` is defined on `FrameProcessor`, so **every** processor has it. The
+  pipeline calls it directly on each processor at teardown
+  (`Pipeline._cleanup_processors()`), independent of frame flow. It is the only
+  hook **guaranteed** to run no matter how the pipeline ended.
+- `start(StartFrame)`, `stop(EndFrame)`, and `cancel(CancelFrame)` are **not**
+  part of `FrameProcessor`. They are conventions provided by some base classes
+  (`AIService` and its subclasses, `BaseInputTransport`, `BaseOutputTransport`),
+  each of which dispatches to them from its own `process_frame`. A plain
+  `FrameProcessor` (an aggregator, a filter) has none of them; it has only
+  `process_frame` and `cleanup()`.
+- Some processors handle these frames inline instead, with
+  `isinstance(frame, CancelFrame)` (or `(EndFrame, CancelFrame)`) branches in
+  `process_frame`. For this rule, that is equivalent to a `cancel()`/`stop()`
+  override.
+
+`stop` (EndFrame) and `cancel` (CancelFrame) differ in urgency: `EndFrame` is a
+control frame processed in order, so `stop()` runs after pending frames drain
+(graceful, "finish then stop"); `CancelFrame` is a system frame processed
+immediately ahead of the queue, so `cancel()` runs at once and discards pending
+work ("stop now"). Both are frame-driven, so a processor that never receives the
+frame never runs them.
+
+### The rule
+
+Decide where each teardown action goes with two questions:
+
+1. **Must it happen on every exit path?** Releasing resources (closing sockets,
+   releasing clients, cancelling tasks you created with `self.create_task()`,
+   deleting temp files) must. Put it in `cleanup()` and make it idempotent.
+   `cleanup()` is guaranteed; `stop()`/`cancel()`/inline branches are not (the
+   frame can be filtered, swallowed, or never reach the processor), so they must
+   never be the *only* place a resource is released.
+
+2. **Must it happen promptly, before the queue drains?** Stopping active output
+   (cancelling the task still generating audio, telling the transport to stop
+   sending) must, or the bot keeps talking until teardown. Do that in `cancel()`
+   (and, for graceful shutdown, `stop()`), *in addition to* `cleanup()`. Because
+   the release/cancel is idempotent, doing it in both places is safe.
+
+   This includes shutting down an **independent producer**. A websocket or gRPC
+   receive loop runs on its own task and keeps delivering data until you
+   disconnect it, so stopping only the consumer side (for example the task that
+   drains decoded audio) is not enough: the producer keeps reading until
+   teardown. Disconnect the producer in `cancel()`/`stop()`, then repeat it in
+   `cleanup()`.
+
+In short: **`cleanup()` owns the complete, guaranteed teardown; `cancel()` does
+the time-sensitive subset early.** Do not call `cleanup()` from `cancel()` or
+`stop()`: the framework already calls it separately, so doing both runs the logic
+twice. (A plain helper object owned by a processor, not itself a
+`FrameProcessor`, has no framework-driven `cleanup()`, so it is fine for its
+`stop()`/`cancel()` to delegate to its own idempotent `cleanup()`.)
+
+`FrameProcessor.cleanup()` cancels only the processor's *internal* input/process
+tasks. Tasks you create with `self.create_task()` are yours to cancel, so they
+belong in your `cleanup()` override.
+
+**Centralize shared teardown.** When more than one hook needs the same work (for
+example `cancel()`, `stop()`, and `cleanup()` all closing the same connection),
+put that work in a single idempotent private method and have each hook call it.
+Never copy the body into more than one hook: if a later change updates one copy
+and misses another, the processor leaks. Each hook stays a thin wrapper that
+calls `super().<hook>()` (which differs per hook and is required) and then the
+shared helper. Reuse an existing helper (`_disconnect()`, `_stop_tasks()`) when
+there is one; if the hooks share a superset of it, extract that superset into its
+own method and leave the lower-level helper for the paths that reuse it (such as
+a reconnect).
+
+### Example
+
+```python
+class MyService(AIService):
+    async def stop(self, frame: EndFrame):
+        await super().stop(frame)
+        await self._teardown()
+
+    async def cancel(self, frame: CancelFrame):
+        await super().cancel(frame)
+        await self._teardown()
+
+    async def cleanup(self):
+        await super().cleanup()
+        await self._teardown()
+
+    async def _teardown(self):
+        # One idempotent teardown body shared by all three hooks. _disconnect()
+        # also cancels the receive-loop task (an independent producer), which is
+        # why it must run on the prompt cancel()/stop() paths, not only here.
+        await self._disconnect()
+```
+
+A plain `FrameProcessor` has only `cleanup()`, so its custom tasks go there:
+
+```python
+class MyAggregator(FrameProcessor):
+    async def cleanup(self):
+        await super().cleanup()
+        await self._cancel_my_task()  # the only teardown hook it has
+```
+
+### Exception: serializers
+
+`FrameSerializer` is not a `FrameProcessor` and has no `cleanup()`. Serializers
+that act on `EndFrame`/`CancelFrame` (for example telephony serializers sending a
+provider disconnect message) can only do so on the frame path. That is expected:
+there is no guaranteed hook to move them to.
+
 # Contributor Covenant Code of Conduct
 
 ## Our Pledge
