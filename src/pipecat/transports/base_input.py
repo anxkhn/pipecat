@@ -167,6 +167,19 @@ class BaseInputTransport(FrameProcessor):
         if self._params.audio_in_filter:
             await self._params.audio_in_filter.stop()
 
+    async def cleanup(self):
+        """Release input transport resources at teardown (guaranteed).
+
+        Cancels the audio input task and stops the audio filter. The frame-driven
+        ``stop``/``cancel`` paths do this promptly; this repeats it idempotently
+        so it happens even if those frames never arrive. See the Processor
+        Lifecycle section in ``CONTRIBUTING.md``.
+        """
+        await super().cleanup()
+        await self._cancel_audio_task()
+        if self._params.audio_in_filter:
+            await self._params.audio_in_filter.stop()
+
     async def set_transport_ready(self, frame: StartFrame):
         """Called when the transport is ready to stream.
 

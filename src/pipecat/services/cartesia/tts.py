@@ -21,8 +21,6 @@ from websockets.asyncio.client import connect as websocket_connect
 from websockets.protocol import State
 
 from pipecat.frames.frames import (
-    CancelFrame,
-    EndFrame,
     ErrorFrame,
     Frame,
     StartFrame,
@@ -534,24 +532,6 @@ class CartesiaTTSService(WebsocketTTSService):
         self._output_sample_rate = self.sample_rate
         await self._connect()
 
-    async def stop(self, frame: EndFrame):
-        """Stop the Cartesia TTS service.
-
-        Args:
-            frame: The end frame.
-        """
-        await super().stop(frame)
-        await self._disconnect()
-
-    async def cancel(self, frame: CancelFrame):
-        """Stop the Cartesia TTS service.
-
-        Args:
-            frame: The end frame.
-        """
-        await super().cancel(frame)
-        await self._disconnect()
-
     async def _connect(self):
         await super()._connect()
 
@@ -912,22 +892,12 @@ class CartesiaHttpTTSService(TTSService):
             await self._session.close()
             self._session = None
 
-    async def stop(self, frame: EndFrame):
-        """Stop the Cartesia HTTP TTS service.
+    async def cleanup(self):
+        """Close the owned HTTP session at teardown (guaranteed).
 
-        Args:
-            frame: The end frame.
+        See the Processor Lifecycle section in ``CONTRIBUTING.md``.
         """
-        await super().stop(frame)
-        await self._close_session()
-
-    async def cancel(self, frame: CancelFrame):
-        """Cancel the Cartesia HTTP TTS service.
-
-        Args:
-            frame: The cancel frame.
-        """
-        await super().cancel(frame)
+        await super().cleanup()
         await self._close_session()
 
     @traced_tts

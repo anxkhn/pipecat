@@ -430,6 +430,18 @@ class DeepgramFluxSTTBase(STTService):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release Deepgram Flux STT resources at teardown (guaranteed).
+
+        Tears down the transport (receive and watchdog tasks plus the
+        connection) so it is released even if no ``EndFrame`` or ``CancelFrame``
+        reaches this processor. ``_disconnect`` is idempotent, so repeating it
+        from the frame-driven paths above is harmless. See the Processor
+        Lifecycle section in ``CONTRIBUTING.md``.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     async def start_metrics(self):
         """Start TTFB and processing metrics collection."""
         # TTFB (Time To First Byte) metrics are currently disabled for Deepgram Flux.

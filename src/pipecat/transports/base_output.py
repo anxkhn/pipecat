@@ -152,6 +152,18 @@ class BaseOutputTransport(FrameProcessor):
         for _, sender in self._media_senders.items():
             await sender.cancel(frame)
 
+    async def cleanup(self):
+        """Release output transport resources at teardown (guaranteed).
+
+        Cleans up every media sender (cancelling its audio, clock, and video
+        tasks and stopping its mixer) so they are released even if no
+        ``CancelFrame`` reaches this processor. See the Processor Lifecycle
+        section in ``CONTRIBUTING.md``.
+        """
+        await super().cleanup()
+        for _, sender in self._media_senders.items():
+            await sender.cleanup()
+
     async def set_transport_ready(self, frame: StartFrame):
         """Called when the transport is ready to stream.
 
@@ -525,6 +537,15 @@ class BaseOutputTransport(FrameProcessor):
 
             Args:
                 frame: The cancel frame signaling immediate cancellation.
+            """
+            await self.cleanup()
+
+        async def cleanup(self):
+            """Release media sender resources at teardown (guaranteed).
+
+            Cancels the audio, clock, and video tasks and stops the mixer. The
+            transport calls this from its own ``cleanup`` for every sender, so it
+            runs even if no ``CancelFrame`` reaches the transport. Idempotent.
             """
             # Since we are cancelling everything it doesn't matter what task we cancel first.
             await self._cancel_audio_task()

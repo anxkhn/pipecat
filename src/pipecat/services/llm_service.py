@@ -492,6 +492,20 @@ class LLMService(UserTurnCompletionLLMServiceMixin, AIService, Generic[TAdapter]
             await self._cancel_sequential_runner_task()
         await self._cancel_summary_task()
 
+    async def cleanup(self):
+        """Release LLM service resources at teardown (guaranteed).
+
+        Cancels the sequential function-call runner, the summary task, and any
+        in-flight function-call tasks so they are torn down even if no
+        ``EndFrame`` or ``CancelFrame`` reaches this processor. Each cancel is
+        idempotent. See the Processor Lifecycle section in ``CONTRIBUTING.md``.
+        """
+        await super().cleanup()
+        if not self._run_in_parallel:
+            await self._cancel_sequential_runner_task()
+        await self._cancel_summary_task()
+        await self._cancel_all_function_call_tasks()
+
     def append_system_instruction(self, instruction: str) -> None:
         """Append durable text to the system instruction, preserving the user's prompt.
 
@@ -1317,6 +1331,15 @@ class LLMService(UserTurnCompletionLLMServiceMixin, AIService, Generic[TAdapter]
         if self._summary_task:
             await self.cancel_task(self._summary_task)
             self._summary_task = None
+
+    async def _cancel_all_function_call_tasks(self):
+        # Snapshot first: cancel_task awaits, during which done callbacks may
+        # mutate _function_call_tasks.
+        for task in list(self._function_call_tasks.keys()):
+            if task:
+                task.remove_done_callback(self._function_call_task_finished)
+                await self.cancel_task(task)
+        self._function_call_tasks.clear()
 
     async def _sequential_runner_handler(self):
         while True:

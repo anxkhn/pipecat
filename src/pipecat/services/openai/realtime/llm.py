@@ -517,6 +517,18 @@ class OpenAIRealtimeLLMService(LLMService[OpenAIRealtimeLLMAdapter]):
         await super().cancel(frame)
         await self._disconnect()
 
+    async def cleanup(self):
+        """Release realtime LLM resources at teardown (guaranteed).
+
+        Closes the websocket and cancels the receive task so they are released
+        even if no ``EndFrame`` or ``CancelFrame`` reaches this processor.
+        ``_disconnect`` is idempotent, so repeating it from the frame-driven
+        paths above is harmless. See the Processor Lifecycle section in
+        ``CONTRIBUTING.md``.
+        """
+        await super().cleanup()
+        await self._disconnect()
+
     #
     # speech and interruption handling
     #
